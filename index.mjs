@@ -3,6 +3,12 @@ import express from "express";
 import cors from "cors";
 import shoppingListRoutes from "./routes/shoppingList.mjs";
 import { spawn } from "child_process";
+//new routes
+import recipesRoutes from "./routes/recipes.routes.mjs";
+import fridgeRoutes from "./routes/fridge.routes.mjs";
+import mlRoutes from "./routes/ml.routes.mjs";
+import favoriteRecipesRoutes from "./routes/favoriteRecipes.routes.mjs";
+
 
 import posts from "./routes/posts.mjs";
 import { supabase } from "./db/supabase.mjs";
@@ -16,17 +22,16 @@ import FormData from "form-data";
 const app = express(); 
 const PORT = process.env.PORT || 5050;
 
-
 //starts python production --should automatically use phone 
-// if (process.env.NODE_ENV !== "production") {
-//   const ml = spawn("py", ["-m", "uvicorn", "app:app", "--port", "8000", "--reload"], {
-//     cwd: "./ml_service",
-//     stdio: "inherit",
-//     shell: true
-//   });
+if (process.env.NODE_ENV !== "production") {
+  const ml = spawn("py", ["-m", "uvicorn", "app:app", "--port", "8000", "--reload"], {
+    cwd: "./ml_service",
+    stdio: "inherit",
+    shell: true
+  });
 
-//   process.on("exit", () => ml.kill());
-// }
+  process.on("exit", () => ml.kill());
+}
 
 //calls the main frointend  -- elliminating dev calls --look into later and change if needed
 app.use(cors({
@@ -38,6 +43,13 @@ app.use(cors({
 app.use(express.json());
 app.use(bodyParser.json());
 app.use("/api", shoppingListRoutes);
+
+//new routes
+app.use("/api", recipesRoutes);
+app.use("/api", fridgeRoutes);
+app.use("/api", mlRoutes);
+app.use("/api", favoriteRecipesRoutes);
+
 
 
 // Test Supabase connection on startup
@@ -129,7 +141,7 @@ app.get("/api/favorites", async (req, res) => {
   }
 });
 
-// === 🧠 NEW: ML IMAGE DETECTION ROUTE ===
+// === NEW: ML IMAGE DETECTION ROUTE ===
 const upload = multer({ dest: "uploads/" }); // temp folder for images
 
 app.post("/api/detect-image", upload.single("image"), async (req, res) => {
