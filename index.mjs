@@ -22,7 +22,7 @@ import FormData from "form-data";
 const app = express(); 
 const PORT = process.env.PORT || 5050;
 
-//starts python production --should automatically use phone 
+//starts python production -- should automatically use phone 
 if (process.env.NODE_ENV !== "production") {
   const ml = spawn("py", ["-m", "uvicorn", "app:app", "--port", "8000", "--reload"], {
     cwd: "./ml_service",
