@@ -10,7 +10,7 @@ import mlRoutes from "./routes/ml.routes.mjs";
 import favoriteRecipesRoutes from "./routes/favoriteRecipes.routes.mjs";
 
 
-import posts from "./routes/posts.mjs";
+//import posts from "./routes/posts.mjs";
 import { supabase } from "./db/supabase.mjs";
 
 import bodyParser from 'body-parser';
@@ -173,7 +173,7 @@ app.post("/api/detect-image", upload.single("image"), async (req, res) => {
 // === END ML ROUTE ===
 
 // Mount routes correctly
-app.use("/api/posts", posts);  // This gives you /api/posts endpoints
+//app.use("/api/posts", posts);  // This gives you /api/posts endpoints
 
 // Error handling middleware
 app.use((err, _req, res, next) => {

@@ -27,21 +27,20 @@ export async function detectAndSave(req, res) {
 
     // save ingredient to Ingredients table
     const { data: existing, error: findErr } = await supabase
+    .from("Ingredients")
+    .select("IngredientID, name")
+    .ilike("name", ingredient)
+    .limit(1);
+
+  if (findErr) throw findErr;
+
+  if (!existing?.length) {
+    const { error: insertErr } = await supabase
       .from("Ingredients")
-      .select("IngredientID, name")
-      .eq("userID", userID)
-      .ilike("name", ingredient)
-      .limit(1);
+      .insert([{ name: ingredient }]); // <-- remove userID
 
-    if (findErr) throw findErr;
-
-    if (!existing?.length) {
-      const { error: insertErr } = await supabase
-        .from("Ingredients")
-        .insert([{ userID, name: ingredient }]);
-
-      if (insertErr) throw insertErr;
-    }
+    if (insertErr) throw insertErr;
+  }
 
     res.json({ ok: true, ingredient, saved: true });
   } catch (err) {
