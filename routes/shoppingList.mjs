@@ -3,11 +3,7 @@ import { supabase } from "../db/supabase.mjs";
 
 const router = express.Router();
 
-/**
- * Helper: find ingredient by name (case-insensitive), else create it.
- * Assumes Ingredients has: IngredientID, name, userID (and other nullable fields).
- */
-async function getOrCreateIngredientId({ name, userID }) {
+async function getOrCreateIngredientId({ name }) {
   const cleanName = name.trim();
   if (!cleanName) throw new Error("Ingredient name is required");
 
@@ -15,7 +11,7 @@ async function getOrCreateIngredientId({ name, userID }) {
   const { data: existing, error: findErr } = await supabase
     .from("Ingredients")
     .select("IngredientID, name")
-    .eq("userID", userID)
+    //.eq("userID", userID)
     .ilike("name", cleanName) // case-insensitive match
     .limit(1);
 
@@ -25,16 +21,19 @@ async function getOrCreateIngredientId({ name, userID }) {
     return existing[0].IngredientID;
   }
 
-  // 2) Create ingredient
+  // 2) Create ingredient (no userID yet)
   const { data: created, error: createErr } = await supabase
     .from("Ingredients")
-    .insert([{ name: cleanName, userID }])
-    .select("IngredientID")
-    .single();
+    .insert([{ name: cleanName }])
+    .select("IngredientID");
 
   if (createErr) throw createErr;
 
-  return created.IngredientID;
+  const row = Array.isArray(created) ? created[0] : created;
+  if (!row?.IngredientID) throw new Error("Could not read IngredientID after insert");
+
+  return row.IngredientID;
+
 }
 
 /**
@@ -44,20 +43,33 @@ async function getOrCreateIngredientId({ name, userID }) {
  */
 router.post("/shopping-lists", async (req, res) => {
   try {
-    const userID = Number(req.body.userID ?? 1); // until auth exists
     const { data, error } = await supabase
       .from("ShoppingLists")
-      .insert([{ userID }])
-      .select("listID")
-      .single();
+      .insert([{}])
+      .select("*"); // select all so we can see what comes back
 
     if (error) throw error;
-    res.status(201).json({ listID: data.listID });
+
+    // data should be an array
+    const row = Array.isArray(data) ? data[0] : data;
+
+    // Try common id column names
+    const listID = row?.listID ?? row?.id ?? row?.ListID ?? null;
+
+    if (!listID) {
+      return res.status(500).json({
+        error: "Inserted list but could not read listID. Check table primary key column name.",
+        returnedRow: row
+      });
+    }
+
+    res.status(201).json({ listID });
   } catch (err) {
     console.error("Create list error:", err.message);
     res.status(500).json({ error: err.message });
   }
 });
+
 
 /**
  * Get all items in a list (join Ingredients)
@@ -111,30 +123,29 @@ router.get("/shopping-lists/:listID", async (req, res) => {
 router.post("/shopping-lists/:listID/items", async (req, res) => {
   try {
     const listID = Number(req.params.listID);
-    const userID = Number(req.body.userID ?? 1);
     const name = String(req.body.name ?? "");
     const quantity = req.body.quantity ?? null;
 
-    const ingredientID = await getOrCreateIngredientId({ name, userID });
+    const ingredientID = await getOrCreateIngredientId({ name });
 
-    // insert item (if exists already, update quantity instead)
     const { data, error } = await supabase
       .from("ShoppingListItems")
       .upsert(
         [{ listID, ingredientID, quantity }],
         { onConflict: "listID,ingredientID" }
       )
-      .select("itemID, listID, ingredientID, quantity, checked")
-      .single();
+      .select("itemID, listID, ingredientID, quantity, checked");
 
     if (error) throw error;
 
-    res.status(201).json(data);
+    const row = Array.isArray(data) ? data[0] : data;
+    res.status(201).json(row);
   } catch (err) {
     console.error("Add item error:", err.message);
     res.status(500).json({ error: err.message });
   }
 });
+
 
 /**
  * Toggle check
@@ -150,8 +161,10 @@ router.patch("/shopping-lists/:listID/items/:itemID", async (req, res) => {
       .from("ShoppingListItems")
       .update({ checked })
       .eq("itemID", itemID)
-      .select("itemID, checked")
-      .single();
+      .select("itemID, checked");
+
+      const row = Array.isArray(data) ? data[0] : data;
+      res.json(row);
 
     if (error) throw error;
     res.json(data);
@@ -160,6 +173,7 @@ router.patch("/shopping-lists/:listID/items/:itemID", async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+
 
 /**
  * Delete item
