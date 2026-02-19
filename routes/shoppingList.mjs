@@ -69,7 +69,20 @@ router.post("/shopping-lists", async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+router.get("/shopping-lists", async (_req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from("ShoppingLists")
+      .select("*")
+      .order("listID", { ascending: false });
 
+    if (error) throw error;
+    res.json(data ?? []);
+  } catch (err) {
+    console.error("List lists error:", err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
 
 /**
  * Get all items in a list (join Ingredients)
@@ -129,12 +142,13 @@ router.post("/shopping-lists/:listID/items", async (req, res) => {
     const ingredientID = await getOrCreateIngredientId({ name });
 
     const { data, error } = await supabase
-      .from("ShoppingListItems")
-      .upsert(
-        [{ listID, ingredientID, quantity }],
-        { onConflict: "listID,ingredientID" }
-      )
-      .select("itemID, listID, ingredientID, quantity, checked");
+  .from("ShoppingListItems")
+  .upsert(
+    [{ listID, ingredientID, quantity, checked: false }],
+    { onConflict: "listID,ingredientID" }
+  )
+  .select("itemID, listID, ingredientID, quantity, checked");
+
 
     if (error) throw error;
 
@@ -163,16 +177,16 @@ router.patch("/shopping-lists/:listID/items/:itemID", async (req, res) => {
       .eq("itemID", itemID)
       .select("itemID, checked");
 
-      const row = Array.isArray(data) ? data[0] : data;
-      res.json(row);
-
     if (error) throw error;
-    res.json(data);
+
+    const row = Array.isArray(data) ? data[0] : data;
+    res.json(row);
   } catch (err) {
     console.error("Toggle item error:", err.message);
     res.status(500).json({ error: err.message });
   }
 });
+
 
 
 /**
