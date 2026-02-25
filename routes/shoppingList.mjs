@@ -171,6 +171,9 @@ router.patch("/shopping-lists/:listID/items/:itemID", async (req, res) => {
     const itemID = Number(req.params.itemID);
     const checked = Boolean(req.body.checked);
 
+
+
+    
     const { data, error } = await supabase
       .from("ShoppingListItems")
       .update({ checked })
