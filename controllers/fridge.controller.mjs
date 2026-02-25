@@ -4,7 +4,7 @@ async function getOrCreateCategoryId(categoryName) {
   const name = (categoryName || "Other / Uncategorized").trim();
 
   const { data: existing, error: findErr } = await supabase
-    .from("Categories")
+    .from("categories")
     .select("CategoryID")
     .eq("name", name)
     .limit(1);
@@ -13,7 +13,7 @@ async function getOrCreateCategoryId(categoryName) {
   if (existing?.length) return existing[0].CategoryID;
 
   const { data: created, error: createErr } = await supabase
-    .from("Categories")
+    .from("categories")
     .insert([{ name }])
     .select("CategoryID")
     .single();
@@ -77,10 +77,13 @@ export async function addFridgeItem(req, res) {
   }
 }
 
-// GET /api/fridge/items
-export async function getFridgeItems(_req, res) {
+// GET /api/fridge/items?category=Fruits&search=ban
+export async function getFridgeItems(req, res) {
   try {
-    const { data, error } = await supabase
+    const category = req.query.category || null;
+    const search = req.query.search || null;
+
+    let query = supabase
       .from("Ingredients")
       .select(`
         IngredientID,
@@ -88,10 +91,22 @@ export async function getFridgeItems(_req, res) {
         quantity,
         tags,
         CategoryID,
-        Categories ( name )
+        categories ( name )
       `)
-      .order("IngredientID", { ascending: false });
+      .gt("quantity", 1) // 🔥 only items with quantity > 1
+      .order("name", { ascending: true });
 
+    // filter by category
+    if (category) {
+      query = query.eq("categories.name", category);
+    }
+
+    // search filter
+    if (search) {
+      query = query.ilike("name", `%${search}%`);
+    }
+
+    const { data, error } = await query;
     if (error) throw error;
 
     const items = (data ?? []).map((r) => ({
@@ -99,7 +114,7 @@ export async function getFridgeItems(_req, res) {
       name: r.name,
       quantity: r.quantity,
       tags: r.tags ?? [],
-      category: r.Categories?.name ?? "Other / Uncategorized",
+      category: r.categories?.name ?? "Other / Uncategorized",
       CategoryID: r.CategoryID ?? null
     }));
 
