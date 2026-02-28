@@ -4,10 +4,8 @@ import cors from "cors";
 import shoppingListRoutes from "./routes/shoppingList.mjs";
 import { spawn } from "child_process";
 //new routes
-import recipesRoutes from "./routes/recipes.routes.mjs";
 import fridgeRoutes from "./routes/fridge.routes.mjs";
 import mlRoutes from "./routes/ml.routes.mjs";
-import favoriteRecipesRoutes from "./routes/favoriteRecipes.routes.mjs";
 
 
 //import posts from "./routes/posts.mjs";
@@ -24,7 +22,7 @@ const PORT = process.env.PORT || 5050;
 
 //starts python production -- should automatically use phone 
 if (process.env.NODE_ENV !== "production") {
-  const ml = spawn("py", ["-m", "uvicorn", "app:app", "--port", "8000", "--reload"], {
+  const ml = spawn("python", ["-m", "uvicorn", "app:app", "--port", "8000", "--reload"], {
     cwd: "./ml_service",
     stdio: "inherit",
     shell: true

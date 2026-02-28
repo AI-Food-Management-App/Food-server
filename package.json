@@ -1,24 +1,21 @@
 {
+  "name": "food-server",
+  "version": "1.0.0",
+  "type": "module",
   "dependencies": {
     "@supabase/supabase-js": "^2.91.1",
     "axios": "^1.13.2",
+    "body-parser": "^1.20.2",
     "cors": "^2.8.5",
     "dotenv": "^17.2.3",
     "express": "^5.2.1",
     "form-data": "^4.0.5",
-    "FormData": "^0.10.1",
-    "fs": "^0.0.1-security",
-    "git": "^0.1.5",
-    "import": "^0.0.6",
-    "multer": "^2.0.2",
-    "posts": "^0.0.1",
-    "python": "^0.0.4",
-    "supabase": "^2.72.8"
+    "multer": "^2.0.2"
   },
   "devDependencies": {
     "concurrently": "^9.2.1"
   },
   "scripts": {
-    "dev": "concurrently \"node index.mjs\" \"cd ml_service && py -m uvicorn app:app --port 8000 --reload\""
+    "dev": "concurrently \"node index.mjs\" \"cd ml_service && python -m uvicorn app:app --port 8000 --reload\""
   }
 }
