@@ -16,11 +16,11 @@ export async function detectAndSave(req, res) {
     const form = new FormData();
     form.append("image", fs.createReadStream(req.file.path));
 
-    const pythonApi = `${process.env.ML_SERVICE_URL || "http://localhost:8000"}/detect`;
-    const mlResp = await axios.post(pythonApi, form, {
-      headers: form.getHeaders(),
-      timeout: 20000,
-    });
+    const response = await axios.post(
+    `${process.env.ML_SERVICE_URL}/detect`,
+     formData,
+    { headers: formData.getHeaders() }
+   );
 
     fs.unlink(req.file.path, () => {});
 

@@ -1,11 +1,8 @@
 import "./loadEnvironment.mjs";
 import express from "express";
 import cors from "cors";
-import { spawn } from "child_process";
 import bodyParser from "body-parser";
-
 import shoppingListRoutes from "./routes/shoppingList.mjs";
-import { spawn } from "child_process";
 //new routes
 import recipesRoutes from "./routes/recipes.routes.mjs";
 import fridgeRoutes from "./routes/fridge.routes.mjs";
@@ -18,15 +15,6 @@ import { supabase } from "./db/supabase.mjs";
 const app = express();
 const PORT = process.env.PORT || 5050;
 
-// start python in dev
-if (process.env.NODE_ENV !== "production") {
-  const ml = spawn("python", ["-m", "uvicorn", "app:app", "--port", "8000", "--reload"], {
-    cwd: "./ml_service",
-    stdio: "inherit",
-    shell: true
-  });
-  process.on("exit", () => ml.kill());
-}
 
 app.use(cors({ origin: ["http://localhost:4200"], credentials: true }));
 app.use(express.json());
