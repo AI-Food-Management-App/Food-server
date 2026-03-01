@@ -3,11 +3,8 @@ import express from "express";
 import cors from "cors";
 import bodyParser from "body-parser";
 import shoppingListRoutes from "./routes/shoppingList.mjs";
-//new routes
-import recipesRoutes from "./routes/recipes.routes.mjs";
 import fridgeRoutes from "./routes/fridge.routes.mjs";
 import mlRoutes from "./routes/ml.routes.mjs";
-import favoriteRecipesRoutes from "./routes/favoriteRecipes.routes.mjs";
 
 
 import { supabase } from "./db/supabase.mjs";

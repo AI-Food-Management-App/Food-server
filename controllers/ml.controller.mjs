@@ -17,14 +17,14 @@ export async function detectAndSave(req, res) {
     form.append("image", fs.createReadStream(req.file.path));
 
     const response = await axios.post(
-    `${process.env.ML_SERVICE_URL}/detect`,
-     formData,
-    { headers: formData.getHeaders() }
-   );
+      `${process.env.ML_SERVICE_URL}/detect`,
+      form,
+      { headers: form.getHeaders() }
+    );
 
     fs.unlink(req.file.path, () => {});
 
-    const ingredient = mlResp.data?.ingredient?.trim?.() || null;
+    const ingredient = response.data?.ingredient?.trim?.() || null;
     if (!ingredient) return res.json({ ok: true, ingredient: null, saved: false });
 
     // 2) DB-first lookup (case-insensitive)
