@@ -93,7 +93,7 @@ export async function getFridgeItems(req, res) {
         CategoryID,
         categories ( name )
       `)
-      .gt("quantity", 1) // 🔥 only items with quantity > 1
+      .gt("quantity", 1) //only items with quantity > 1
       .order("name", { ascending: true });
 
     // filter by category
