@@ -23,38 +23,41 @@ export async function detectAndSave(req, res) {
     // cleanup temp file
     fs.unlink(req.file.path, () => {});
 
-    const ingredient = mlResp.data?.ingredient?.trim?.() || null;
-    if (!ingredient) return res.json({ ok: true, ingredient: null, saved: false });
+    const ingredientName = mlResp.data?.ingredient?.trim?.() || null;
+    if (!ingredientName) return res.json({ ok: true, ingredient: null, saved: false });
 
-    // If ingredient exists -> quantity + 1, else create with quantity 1
-    const { data: existing, error: findErr } = await supabase
+    // 1) Ensure in CatalogueTBL (default uncategorized)
+    const catItem = await findOrCreateCatalogueItemByName(ingredientName, 22);
+
+    // 2) Update inventory (Ingredients) by CatalogueID
+    const { data: existingInv, error: invErr } = await supabase
       .from("Ingredients")
-      .select("IngredientID, quantity")
-      .ilike("name", ingredient)
+      .select("IngredientID, quantity, CatalogueID")
+      .eq("CatalogueID", catItem.CatalogueID)
       .limit(1);
 
-    if (findErr) throw findErr;
+    if (invErr) throw invErr;
 
-    if (existing?.length) {
-      const row = existing[0];
+    if (existingInv?.length) {
+      const row = existingInv[0];
       const newQty = Number(row.quantity ?? 0) + 1;
 
-      const { error: updateErr } = await supabase
+      const { error: updErr } = await supabase
         .from("Ingredients")
         .update({ quantity: newQty })
         .eq("IngredientID", row.IngredientID);
 
-      if (updateErr) throw updateErr;
-      return res.json({ ok: true, ingredient, saved: true, updated: true, quantity: newQty });
+      if (updErr) throw updErr;
+      return res.json({ ok: true, ingredient: catItem.name, saved: true, updated: true, quantity: newQty });
     }
 
-    const { error: insertErr } = await supabase
+    const { error: insErr } = await supabase
       .from("Ingredients")
-      .insert([{ name: ingredient, quantity: 1, CategoryID: 22 }]); // default category
+      .insert([{ CatalogueID: catItem.CatalogueID, quantity: 1 }]);
 
-    if (insertErr) throw insertErr;
+    if (insErr) throw insErr;
 
-    return res.json({ ok: true, ingredient, saved: true, created: true, quantity: 1 });
+    return res.json({ ok: true, ingredient: catItem.name, saved: true, created: true, quantity: 1 });
   } catch (err) {
     console.error("detectAndSave error:", err?.message || err);
     return res.status(500).json({ error: err?.message || "Failed to detect/save ingredient" });
