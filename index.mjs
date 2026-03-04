@@ -7,6 +7,7 @@ import mlRoutes from "./routes/ml.routes.mjs";
 import authRoutes from "./routes/auth.routes.mjs";
 import { requireAuth } from "./middleware/auth.middleware.mjs";
 import { supabase } from "./db/supabase.mjs";
+import profileRoutes from "./routes/profile.routes.mjs";
 
 const app = express();
 const PORT = process.env.PORT || 5050;
@@ -21,6 +22,7 @@ app.use("/api", authRoutes);
 app.use("/api", requireAuth, fridgeRoutes);
 app.use("/api", requireAuth, shoppingListRoutes);
 app.use("/api", requireAuth, mlRoutes);
+app.use("/api", requireAuth, profileRoutes);
 
 // Supabase test
 (async () => {
