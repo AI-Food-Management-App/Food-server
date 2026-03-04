@@ -1,54 +1,30 @@
 import { supabase } from "../db/supabase.mjs";
-
-function isValidName(name) {
-  // Only letters, spaces, hyphens, apostrophes — no special characters
-  return /^[a-zA-Z\s'-]+$/.test(name.trim());
-}
-
-function calculateAge(dob) {
-  const birth = new Date(dob);
-  const today = new Date();
-  let age = today.getFullYear() - birth.getFullYear();
-  const m = today.getMonth() - birth.getMonth();
-  if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) age--;
-  return age;
-}
+import {
+  validateRegisterBody,
+  validateLoginBody
+} from "../validators/auth.validators.mjs";
 
 export async function register(req, res) {
   try {
     const { name, dob, email, password } = req.body;
 
-    if (!name || !dob || !email || !password)
-      return res.status(400).json({ error: "All fields are required" });
+    const errors = validateRegisterBody({ name, dob, email, password });
+    if (errors) return res.status(400).json({ errors });
 
-    if (!isValidName(name))
-      return res.status(400).json({ error: "Name cannot contain special characters" });
-
-    if (!email.includes("@"))
-      return res.status(400).json({ error: "Email must contain @" });
-
-    if (calculateAge(dob) < 16)
-      return res.status(400).json({ error: "You must be at least 16 years old to register" });
-
-    if (password.length < 8)
-      return res.status(400).json({ error: "Password must be at least 8 characters" });
-
-    // Supabase Auth creates the user and hashes the password
     const { data, error } = await supabase.auth.signUp({
-      email,
+      email: email.trim().toLowerCase(),
       password,
-      options: { data: { name, dob } } 
+      options: { data: { name: name.trim(), dob } }
     });
 
     if (error) throw error;
 
-    
     if (data.user) {
       await supabase.from("profiles").insert([{
-        id: data.user.id, 
+        id: data.user.id,
         name: name.trim(),
         dob,
-        email
+        email: email.trim().toLowerCase()
       }]);
     }
 
@@ -63,12 +39,14 @@ export async function login(req, res) {
   try {
     const { email, password } = req.body;
 
-    if (!email || !password)
-      return res.status(400).json({ error: "Email and password are required" });
+    const errors = validateLoginBody({ email, password });
+    if (errors) return res.status(400).json({ errors });
 
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email: email.trim().toLowerCase(),
+      password
+    });
 
-    // Always return a generic message so attackers can't guess which field is wrong
     if (error) return res.status(401).json({ error: "Invalid email or password" });
 
     res.json({
