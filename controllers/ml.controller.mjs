@@ -3,6 +3,7 @@ import axios from "axios";
 import fs from "fs";
 import FormData from "form-data";
 import { supabase } from "../db/supabase.mjs";
+import { findOrCreateCatalogueItemByName } from "./catalogue.helpers.mjs";
 
 export const upload = multer({ dest: "uploads/" });
 
@@ -26,7 +27,7 @@ export async function detectAndSave(req, res) {
     const ingredientName = mlResp.data?.ingredient?.trim?.() || null;
     if (!ingredientName) return res.json({ ok: true, ingredient: null, saved: false });
 
-    // 1) Ensure in CatalogueTBL (default uncategorized)
+    // 1) Ensure this exists in CatalogueTBL (default uncategorized = 22 if unknown)
     const catItem = await findOrCreateCatalogueItemByName(ingredientName, 22);
 
     // 2) Update inventory (Ingredients) by CatalogueID
@@ -48,16 +49,34 @@ export async function detectAndSave(req, res) {
         .eq("IngredientID", row.IngredientID);
 
       if (updErr) throw updErr;
-      return res.json({ ok: true, ingredient: catItem.name, saved: true, updated: true, quantity: newQty });
+
+      return res.json({
+        ok: true,
+        ingredient: catItem.name,
+        saved: true,
+        updated: true,
+        quantity: newQty,
+        CatalogueID: catItem.CatalogueID,
+        CategoryID: catItem.CategoryID ?? 22,
+      });
     }
 
+    // No inventory row yet -> create it with quantity 1
     const { error: insErr } = await supabase
       .from("Ingredients")
       .insert([{ CatalogueID: catItem.CatalogueID, quantity: 1 }]);
 
     if (insErr) throw insErr;
 
-    return res.json({ ok: true, ingredient: catItem.name, saved: true, created: true, quantity: 1 });
+    return res.json({
+      ok: true,
+      ingredient: catItem.name,
+      saved: true,
+      created: true,
+      quantity: 1,
+      CatalogueID: catItem.CatalogueID,
+      CategoryID: catItem.CategoryID ?? 22,
+    });
   } catch (err) {
     console.error("detectAndSave error:", err?.message || err);
     return res.status(500).json({ error: err?.message || "Failed to detect/save ingredient" });
