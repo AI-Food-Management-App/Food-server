@@ -16,6 +16,6 @@
     "concurrently": "^9.2.1"
   },
   "scripts": {
-    "dev": "concurrently \"node index.mjs\" \"cd ml_service && python -m uvicorn app:app --port 8000 --reload\""
+    "dev": "node index.mjs"
   }
 }
