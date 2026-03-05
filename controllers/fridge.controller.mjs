@@ -1,71 +1,68 @@
 import { supabase } from "../db/supabase.mjs";
-
-async function getOrCreateCategoryId(categoryName) {
-  const name = (categoryName || "Other / Uncategorized").trim();
-
-  const { data: existing, error: findErr } = await supabase
-    .from("categories")
-    .select("CategoryID")
-    .eq("name", name)
-    .limit(1);
-
-  if (findErr) throw findErr;
-  if (existing?.length) return existing[0].CategoryID;
-
-  const { data: created, error: createErr } = await supabase
-    .from("categories")
-    .insert([{ name }])
-    .select("CategoryID")
-    .single();
-
-  if (createErr) throw createErr;
-  return created.CategoryID;
-}
+import { resolveCategoryFromCatalogue } from "./catalogue.helpers.mjs";
 
 // POST /api/fridge/items
-// body: { name, quantity?, category?, tags? }
+// body: { name, quantityDelta?, expiryDate? }
 export async function addFridgeItem(req, res) {
   try {
     const name = String(req.body.name ?? "").trim();
     if (!name) return res.status(400).json({ error: "name is required" });
 
-    const quantityToAdd = Number(req.body.quantity ?? 1);
-    const categoryName = String(req.body.category ?? "Other / Uncategorized");
-    const tags = Array.isArray(req.body.tags) ? req.body.tags : [];
+    const delta = Number(req.body.quantityDelta ?? 1);
+    const quantityDelta = Number.isFinite(delta) ? delta : 1;
 
-    const categoryID = await getOrCreateCategoryId(categoryName);
+    // expiryDate can be null or "YYYY-MM-DD"
+    const expiryDateRaw = req.body.expiryDate ?? null;
+    const expiryDate = expiryDateRaw ? String(expiryDateRaw) : null;
 
-    // check existing ingredient (case-insensitive)
-    const { data: existing, error: findErr } = await supabase
+    // categorize via catalogue match (partial/fuzzy)
+    const { CategoryID } = await resolveCategoryFromCatalogue(name, 22);
+
+    // find existing inventory row by SAME user-entered name (case-insensitive)
+    // If you want expiryDate to create separate rows, uncomment the .eq/.is logic below.
+    let q = supabase
       .from("Ingredients")
-      .select("IngredientID, name, quantity, CategoryID, tags")
+      .select("IngredientID, name, quantity, CategoryID, expiryDate")
       .ilike("name", name)
       .limit(1);
 
+    // Optional: treat same name but different expiryDate as different rows:
+    // q = expiryDate ? q.eq("expiryDate", expiryDate) : q.is("expiryDate", null);
+
+    const { data: existing, error: findErr } = await q;
     if (findErr) throw findErr;
 
     if (existing?.length) {
       const row = existing[0];
-      const newQty = Number(row.quantity ?? 0) + (Number.isFinite(quantityToAdd) ? quantityToAdd : 1);
+      const newQty = Number(row.quantity ?? 0) + quantityDelta;
 
-      const mergedTags = Array.from(new Set([...(row.tags ?? []), ...tags]));
-
-      const { data: updated, error: updateErr } = await supabase
+      const { data: updated, error: updErr } = await supabase
         .from("Ingredients")
-        .update({ quantity: newQty, CategoryID: row.CategoryID ?? categoryID, tags: mergedTags })
+        .update({
+          quantity: newQty,
+          CategoryID: row.CategoryID ?? CategoryID, // keep existing if already set
+          expiryDate: expiryDate ?? row.expiryDate, // only set if provided
+        })
         .eq("IngredientID", row.IngredientID)
-        .select("IngredientID, name, quantity, CategoryID, tags")
+        .select("IngredientID, name, quantity, CategoryID, expiryDate")
         .single();
 
-      if (updateErr) throw updateErr;
-      return res.status(200).json({ ok: true, item: updated, created: false });
+      if (updErr) throw updErr;
+      return res.json({ ok: true, item: updated, created: false });
     }
 
-    // create new ingredient
+    // create new row (store user-entered name)
     const { data: created, error: createErr } = await supabase
       .from("Ingredients")
-      .insert([{ name, quantity: quantityToAdd, CategoryID: categoryID, tags }])
-      .select("IngredientID, name, quantity, CategoryID, tags")
+      .insert([
+        {
+          name,
+          quantity: quantityDelta,
+          CategoryID,
+          expiryDate,
+        },
+      ])
+      .select("IngredientID, name, quantity, CategoryID, expiryDate")
       .single();
 
     if (createErr) throw createErr;
@@ -76,51 +73,58 @@ export async function addFridgeItem(req, res) {
     res.status(500).json({ error: err.message });
   }
 }
-
-// GET /api/fridge/items?category=Fruits&search=ban
+//getting fridge items/ingredients as theyre often referred to
 export async function getFridgeItems(req, res) {
   try {
-    const category = req.query.category || null;
+    const categoryId = req.query.categoryId ? Number(req.query.categoryId) : null;
     const search = req.query.search || null;
 
-    let query = supabase
+    let q = supabase
       .from("Ingredients")
       .select(`
         IngredientID,
         name,
         quantity,
-        tags,
+        expiryDate,
         CategoryID,
         categories ( name )
       `)
-      .gt("quantity", 1) // 🔥 only items with quantity > 1
+      .gt("quantity", 0)
       .order("name", { ascending: true });
 
-    // filter by category
-    if (category) {
-      query = query.eq("categories.name", category);
-    }
+    if (categoryId) q = q.eq("CategoryID", categoryId);
+    if (search) q = q.ilike("name", `%${search}%`);
 
-    // search filter
-    if (search) {
-      query = query.ilike("name", `%${search}%`);
-    }
-
-    const { data, error } = await query;
+    const { data, error } = await q;
     if (error) throw error;
 
-    const items = (data ?? []).map((r) => ({
+    const items = (data ?? []).map(r => ({
       IngredientID: r.IngredientID,
       name: r.name,
       quantity: r.quantity,
-      tags: r.tags ?? [],
+      expiryDate: r.expiryDate ?? null,
+      CategoryID: r.CategoryID,
       category: r.categories?.name ?? "Other / Uncategorized",
-      CategoryID: r.CategoryID ?? null
     }));
 
     res.json(items);
   } catch (err) {
     console.error("getFridgeItems error:", err.message);
+    res.status(500).json({ error: err.message });
+  }
+}
+//getting the categories for the filtering -- instead of hardcoding them
+export async function getCategories(_req, res) {
+  try {
+    const { data, error } = await supabase
+      .from("categories")
+      .select("CategoryID, name")
+      .order("CategoryID", { ascending: true });
+
+    if (error) throw error;
+    res.json(data ?? []);
+  } catch (err) {
+    console.error("getCategories error:", err.message);
     res.status(500).json({ error: err.message });
   }
 }

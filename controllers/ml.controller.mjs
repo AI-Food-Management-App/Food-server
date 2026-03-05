@@ -3,16 +3,14 @@ import axios from "axios";
 import fs from "fs";
 import FormData from "form-data";
 import { supabase } from "../db/supabase.mjs";
+import { resolveCategoryFromCatalogue } from "./catalogue.helpers.mjs";
 
 export const upload = multer({ dest: "uploads/" });
-
-const DEFAULT_CATEGORY_ID = 22; // Other / Uncategorized
 
 export async function detectAndSave(req, res) {
   try {
     if (!req.file) return res.status(400).json({ error: "No file uploaded" });
 
-    // 1) Send image to ML service
     const form = new FormData();
     form.append("image", fs.createReadStream(req.file.path));
 
@@ -27,54 +25,40 @@ export async function detectAndSave(req, res) {
     const ingredient = response.data?.ingredient?.trim?.() || null;
     if (!ingredient) return res.json({ ok: true, ingredient: null, saved: false });
 
-    // 2) DB-first lookup (case-insensitive)
+    const { CategoryID } = await resolveCategoryFromCatalogue(name, 22);
+
+    // increment quantity for SAME detected label (keeps user's wording = detected wording)
     const { data: existing, error: findErr } = await supabase
       .from("Ingredients")
-      .select("IngredientID, name, quantity, CategoryID")
-      .ilike("name", ingredient)
+      .select("IngredientID, quantity, CategoryID")
+      .ilike("name", name)
       .limit(1);
 
     if (findErr) throw findErr;
 
-    // 3) If exists → increment quantity (keep existing CategoryID)
     if (existing?.length) {
       const row = existing[0];
       const newQty = Number(row.quantity ?? 0) + 1;
 
-      const { error: updateErr } = await supabase
+      const { error: updErr } = await supabase
         .from("Ingredients")
-        .update({ quantity: newQty })
+        .update({ quantity: newQty, CategoryID: row.CategoryID ?? CategoryID })
         .eq("IngredientID", row.IngredientID);
 
-      if (updateErr) throw updateErr;
+      if (updErr) throw updErr;
 
-      return res.json({
-        ok: true,
-        ingredient: row.name,
-        saved: true,
-        updated: true,
-        quantity: newQty,
-        CategoryID: row.CategoryID,
-      });
+      return res.json({ ok: true, ingredient: name, CategoryID: row.CategoryID ?? CategoryID, quantity: newQty, updated: true });
     }
 
-    // 4) Else create uncategorized
-    const { error: insertErr } = await supabase
+    const { error: insErr } = await supabase
       .from("Ingredients")
-      .insert([{ name: ingredient, quantity: 1, CategoryID: DEFAULT_CATEGORY_ID }]);
+      .insert([{ name, quantity: 1, CategoryID }]);
 
-    if (insertErr) throw insertErr;
+    if (insErr) throw insErr;
 
-    return res.json({
-      ok: true,
-      ingredient,
-      saved: true,
-      created: true,
-      quantity: 1,
-      CategoryID: DEFAULT_CATEGORY_ID,
-    });
+    return res.json({ ok: true, ingredient: name, CategoryID, quantity: 1, created: true });
   } catch (err) {
-    console.error("detectAndSave error:", err.message);
-    res.status(500).json({ error: err.message });
+    console.error("detectAndSave error:", err?.message || err);
+    return res.status(500).json({ error: err?.message || "Failed to detect/save ingredient" });
   }
 }
