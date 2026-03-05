@@ -43,7 +43,7 @@ async function getOrCreateIngredientId({ name }) {
  * POST /api/shopping-lists
  * body: { userID }
  */
-router.post("/shopping-lists",validate({ body: createShoppingListBody }), async (req, res) => {
+router.post("/shopping-lists", async (req, res) => {
   try {
     const { data, error } = await supabase
       .from("ShoppingLists")
@@ -90,7 +90,7 @@ router.get("/shopping-lists", async (_req, res) => {
  * Get all items in a list (join Ingredients)
  * GET /api/shopping-lists/:listID
  */
-router.get("/shopping-lists/:listID", validate({ params: listIdParams }), async (req, res) => {
+router.get("/shopping-lists/:listID",  async (req, res) => {
   try {
     const listID = Number(req.params.listID);
 
@@ -135,7 +135,7 @@ router.get("/shopping-lists/:listID", validate({ params: listIdParams }), async 
  * POST /api/shopping-lists/:listID/items
  * body: { name, quantity?, userID }
  */
-router.post("/shopping-lists/:listID/items", validate({ params: listIdParams, body: addShoppingItemBody }), async (req, res) => {
+router.post("/shopping-lists/:listID/items",  async (req, res) => {
   try {
     const listID = Number(req.params.listID);
     const name = String(req.body.name ?? "");
@@ -168,7 +168,7 @@ router.post("/shopping-lists/:listID/items", validate({ params: listIdParams, bo
  * PATCH /api/shopping-lists/:listID/items/:itemID
  * body: { checked: boolean }
  */
-router.patch("/shopping-lists/:listID/items/:itemID", validate({ params: listItemParams, body: toggleShoppingItemBody }), async (req, res) => {
+router.patch("/shopping-lists/:listID/items/:itemID",  async (req, res) => {
   try {
     const itemID = Number(req.params.itemID);
     const checked = Boolean(req.body.checked);
@@ -198,7 +198,7 @@ router.patch("/shopping-lists/:listID/items/:itemID", validate({ params: listIte
  * Delete item
  * DELETE /api/shopping-lists/:listID/items/:itemID
  */
-router.delete("/shopping-lists/:listID/items/:itemID", validate({ params: listItemParams }), async (req, res) => {
+router.delete("/shopping-lists/:listID/items/:itemID",  async (req, res) => {
   try {
     const itemID = Number(req.params.itemID);
 
