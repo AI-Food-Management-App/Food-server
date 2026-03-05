@@ -1,4 +1,6 @@
 import express from "express";
+import { validate } from "../middleware/validate.mjs";
+import { createShoppingListBody, listIdParams, listItemParams, addShoppingItemBody, toggleShoppingItemBody} from "../validators/shopping.schemas.mjs";
 import { supabase } from "../db/supabase.mjs";
 
 const router = express.Router();
@@ -41,7 +43,7 @@ async function getOrCreateIngredientId({ name }) {
  * POST /api/shopping-lists
  * body: { userID }
  */
-router.post("/shopping-lists", async (req, res) => {
+router.post("/shopping-lists",validate({ body: createShoppingListBody }), async (req, res) => {
   try {
     const { data, error } = await supabase
       .from("ShoppingLists")
@@ -88,7 +90,7 @@ router.get("/shopping-lists", async (_req, res) => {
  * Get all items in a list (join Ingredients)
  * GET /api/shopping-lists/:listID
  */
-router.get("/shopping-lists/:listID", async (req, res) => {
+router.get("/shopping-lists/:listID", validate({ params: listIdParams }), async (req, res) => {
   try {
     const listID = Number(req.params.listID);
 
@@ -133,7 +135,7 @@ router.get("/shopping-lists/:listID", async (req, res) => {
  * POST /api/shopping-lists/:listID/items
  * body: { name, quantity?, userID }
  */
-router.post("/shopping-lists/:listID/items", async (req, res) => {
+router.post("/shopping-lists/:listID/items", validate({ params: listIdParams, body: addShoppingItemBody }), async (req, res) => {
   try {
     const listID = Number(req.params.listID);
     const name = String(req.body.name ?? "");
@@ -166,7 +168,7 @@ router.post("/shopping-lists/:listID/items", async (req, res) => {
  * PATCH /api/shopping-lists/:listID/items/:itemID
  * body: { checked: boolean }
  */
-router.patch("/shopping-lists/:listID/items/:itemID", async (req, res) => {
+router.patch("/shopping-lists/:listID/items/:itemID", validate({ params: listItemParams, body: toggleShoppingItemBody }), async (req, res) => {
   try {
     const itemID = Number(req.params.itemID);
     const checked = Boolean(req.body.checked);
@@ -196,7 +198,7 @@ router.patch("/shopping-lists/:listID/items/:itemID", async (req, res) => {
  * Delete item
  * DELETE /api/shopping-lists/:listID/items/:itemID
  */
-router.delete("/shopping-lists/:listID/items/:itemID", async (req, res) => {
+router.delete("/shopping-lists/:listID/items/:itemID", validate({ params: listItemParams }), async (req, res) => {
   try {
     const itemID = Number(req.params.itemID);
 
