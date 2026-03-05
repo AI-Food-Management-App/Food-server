@@ -3,7 +3,7 @@ import axios from "axios";
 import fs from "fs";
 import FormData from "form-data";
 import { supabase } from "../db/supabase.mjs";
-import { findOrCreateCatalogueItemByName } from "./catalogue.helpers.mjs";
+import { resolveCategoryFromCatalogue } from "./catalogue.helpers.mjs";
 
 export const upload = multer({ dest: "uploads/" });
 
@@ -15,68 +15,48 @@ export async function detectAndSave(req, res) {
     form.append("image", fs.createReadStream(req.file.path));
 
     const pythonApi = `${process.env.ML_SERVICE_URL || "http://localhost:8000"}/detect`;
-
     const mlResp = await axios.post(pythonApi, form, {
       headers: form.getHeaders(),
       timeout: 20000,
     });
 
-    // cleanup temp file
     fs.unlink(req.file.path, () => {});
 
-    const ingredientName = mlResp.data?.ingredient?.trim?.() || null;
-    if (!ingredientName) return res.json({ ok: true, ingredient: null, saved: false });
+    const name = mlResp.data?.ingredient?.trim?.() || null;
+    if (!name) return res.json({ ok: true, ingredient: null, saved: false });
 
-    // 1) Ensure this exists in CatalogueTBL (default uncategorized = 22 if unknown)
-    const catItem = await findOrCreateCatalogueItemByName(ingredientName, 22);
+    const { CategoryID } = await resolveCategoryFromCatalogue(name, 22);
 
-    // 2) Update inventory (Ingredients) by CatalogueID
-    const { data: existingInv, error: invErr } = await supabase
+    // increment quantity for SAME detected label (keeps user's wording = detected wording)
+    const { data: existing, error: findErr } = await supabase
       .from("Ingredients")
-      .select("IngredientID, quantity, CatalogueID")
-      .eq("CatalogueID", catItem.CatalogueID)
+      .select("IngredientID, quantity, CategoryID")
+      .ilike("name", name)
       .limit(1);
 
-    if (invErr) throw invErr;
+    if (findErr) throw findErr;
 
-    if (existingInv?.length) {
-      const row = existingInv[0];
+    if (existing?.length) {
+      const row = existing[0];
       const newQty = Number(row.quantity ?? 0) + 1;
 
       const { error: updErr } = await supabase
         .from("Ingredients")
-        .update({ quantity: newQty })
+        .update({ quantity: newQty, CategoryID: row.CategoryID ?? CategoryID })
         .eq("IngredientID", row.IngredientID);
 
       if (updErr) throw updErr;
 
-      return res.json({
-        ok: true,
-        ingredient: catItem.name,
-        saved: true,
-        updated: true,
-        quantity: newQty,
-        CatalogueID: catItem.CatalogueID,
-        CategoryID: catItem.CategoryID ?? 22,
-      });
+      return res.json({ ok: true, ingredient: name, CategoryID: row.CategoryID ?? CategoryID, quantity: newQty, updated: true });
     }
 
-    // No inventory row yet -> create it with quantity 1
     const { error: insErr } = await supabase
       .from("Ingredients")
-      .insert([{ CatalogueID: catItem.CatalogueID, quantity: 1 }]);
+      .insert([{ name, quantity: 1, CategoryID }]);
 
     if (insErr) throw insErr;
 
-    return res.json({
-      ok: true,
-      ingredient: catItem.name,
-      saved: true,
-      created: true,
-      quantity: 1,
-      CatalogueID: catItem.CatalogueID,
-      CategoryID: catItem.CategoryID ?? 22,
-    });
+    return res.json({ ok: true, ingredient: name, CategoryID, quantity: 1, created: true });
   } catch (err) {
     console.error("detectAndSave error:", err?.message || err);
     return res.status(500).json({ error: err?.message || "Failed to detect/save ingredient" });
