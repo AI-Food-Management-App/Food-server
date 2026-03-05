@@ -7,6 +7,10 @@ import shoppingListRoutes from "./routes/shoppingList.mjs";
 import fridgeRoutes from "./routes/fridge.routes.mjs";
 import mlRoutes from "./routes/ml.routes.mjs";
 
+//using supabase for testing 
+import { createApp } from "./app.mjs";
+import { supabase } from "./db/supabase.mjs";
+
 import { supabase } from "./db/supabase.mjs";
 
 const app = express();
