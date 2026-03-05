@@ -22,6 +22,7 @@
   },
   "scripts": {
     "dev": "node index.mjs",
+    "start": "node index.mjs",
     "test": "vitest run"
   }
 }
