@@ -9,7 +9,10 @@ import { requireAuth } from "./middleware/auth.middleware.mjs";
 import { supabase } from "./db/supabase.mjs"; 
 import profileRoutes from "./routes/profile.routes.mjs"; 
 
-const app = express(); const PORT = process.env.PORT || 5050; 
+const app = express(); 
+const PORT = process.env.PORT || 5050; 
+
+
 app.use(cors({ origin: ["http://localhost:4200"], credentials: true })); 
 app.use(express.json()); 
 // routes app.use("/api", authRoutes); 
