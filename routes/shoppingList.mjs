@@ -1,18 +1,17 @@
 import express from "express";
-import { supabase } from "../db/supabase.mjs";
+//import { supabase } from "../db/supabase.mjs";
+import { getSupabaseUserClient } from "../db/supabaseUser.mjs";
 
 const router = express.Router();
 
-async function getOrCreateIngredientId({ name }) {
+async function getOrCreateIngredientId({ supabase, name }) {
   const cleanName = name.trim();
   if (!cleanName) throw new Error("Ingredient name is required");
 
-  // 1) Try find existing ingredient (case-insensitive) for this user
   const { data: existing, error: findErr } = await supabase
     .from("Ingredients")
     .select("IngredientID, name")
-    //.eq("userID", userID)
-    .ilike("name", cleanName) // case-insensitive match
+    .ilike("name", cleanName)
     .limit(1);
 
   if (findErr) throw findErr;
@@ -21,7 +20,6 @@ async function getOrCreateIngredientId({ name }) {
     return existing[0].IngredientID;
   }
 
-  // 2) Create ingredient (no userID yet)
   const { data: created, error: createErr } = await supabase
     .from("Ingredients")
     .insert([{ name: cleanName }])
@@ -33,7 +31,6 @@ async function getOrCreateIngredientId({ name }) {
   if (!row?.IngredientID) throw new Error("Could not read IngredientID after insert");
 
   return row.IngredientID;
-
 }
 
 /**
@@ -43,6 +40,7 @@ async function getOrCreateIngredientId({ name }) {
  */
 router.post("/shopping-lists", async (req, res) => {
   try {
+    const supabase = getSupabaseUserClient(req.accessToken);
     const { data, error } = await supabase
       .from("ShoppingLists")
       .insert([{}])
@@ -71,6 +69,7 @@ router.post("/shopping-lists", async (req, res) => {
 });
 router.get("/shopping-lists", async (_req, res) => {
   try {
+    const supabase = getSupabaseUserClient(req.accessToken);
     const { data, error } = await supabase
       .from("ShoppingLists")
       .select("*")
@@ -90,6 +89,8 @@ router.get("/shopping-lists", async (_req, res) => {
  */
 router.get("/shopping-lists/:listID",  async (req, res) => {
   try {
+    const supabase = getSupabaseUserClient(req.accessToken);
+
     const listID = Number(req.params.listID);
 
     const { data, error } = await supabase
@@ -133,22 +134,22 @@ router.get("/shopping-lists/:listID",  async (req, res) => {
  * POST /api/shopping-lists/:listID/items
  * body: { name, quantity?, userID }
  */
-router.post("/shopping-lists/:listID/items",  async (req, res) => {
+router.post("/shopping-lists/:listID/items", async (req, res) => {
   try {
+    const supabase = getSupabaseUserClient(req.accessToken);
     const listID = Number(req.params.listID);
     const name = String(req.body.name ?? "");
     const quantity = req.body.quantity ?? null;
 
-    const ingredientID = await getOrCreateIngredientId({ name });
+    const ingredientID = await getOrCreateIngredientId({ supabase, name });
 
     const { data, error } = await supabase
-  .from("ShoppingListItems")
-  .upsert(
-    [{ listID, ingredientID, quantity, checked: false }],
-    { onConflict: "listID,ingredientID" }
-  )
-  .select("itemID, listID, ingredientID, quantity, checked");
-
+      .from("ShoppingListItems")
+      .upsert(
+        [{ listID, ingredientID, quantity, checked: false }],
+        { onConflict: "listID,ingredientID" }
+      )
+      .select("itemID, listID, ingredientID, quantity, checked");
 
     if (error) throw error;
 
@@ -171,7 +172,7 @@ router.patch("/shopping-lists/:listID/items/:itemID",  async (req, res) => {
     const itemID = Number(req.params.itemID);
     const checked = Boolean(req.body.checked);
 
-
+    const supabase = getSupabaseUserClient(req.accessToken);
 
     
     const { data, error } = await supabase
@@ -198,6 +199,7 @@ router.patch("/shopping-lists/:listID/items/:itemID",  async (req, res) => {
  */
 router.delete("/shopping-lists/:listID/items/:itemID",  async (req, res) => {
   try {
+    const supabase = getSupabaseUserClient(req.accessToken);
     const itemID = Number(req.params.itemID);
 
     const { error } = await supabase
