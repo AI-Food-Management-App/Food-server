@@ -1,10 +1,14 @@
-import { supabase } from "../db/supabase.mjs";
+//import { supabase } from "../db/supabase.mjs";
+import { getSupabaseUserClient } from "../db/supabaseUser.mjs";
 import { resolveCategoryFromCatalogue } from "./catalogue.helpers.mjs";
 
 // POST /api/fridge/items
 // body: { name, quantityDelta?, expiryDate? }
 export async function addFridgeItem(req, res) {
   try {
+
+    const supabase = getSupabaseUserClient(req.accessToken);
+
     const name = String(req.body.name ?? "").trim();
     if (!name) return res.status(400).json({ error: "name is required" });
 
@@ -76,6 +80,8 @@ export async function addFridgeItem(req, res) {
 //getting fridge items/ingredients as theyre often referred to
 export async function getFridgeItems(req, res) {
   try {
+    const supabase = getSupabaseUserClient(req.accessToken);
+
     const categoryId = req.query.categoryId ? Number(req.query.categoryId) : null;
     const search = req.query.search || null;
 
@@ -116,6 +122,8 @@ export async function getFridgeItems(req, res) {
 //getting the categories for the filtering -- instead of hardcoding them
 export async function getCategories(_req, res) {
   try {
+    const supabase = getSupabaseUserClient(req.accessToken);
+
     const { data, error } = await supabase
       .from("categories")
       .select("CategoryID, name")

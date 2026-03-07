@@ -17,15 +17,23 @@ export async function register(req, res) {
       options: { data: { name: name.trim(), dob } }
     });
 
-    if (error) throw error;
+    if (error) {
+      return res.status(400).json({ error: error.message });
+    }
 
     if (data.user) {
-      await supabase.from("profiles").insert([{
-        id: data.user.id,
-        name: name.trim(),
-        dob,
-        email: email.trim().toLowerCase()
-      }]);
+      const { error: profileError } = await supabase
+        .from("profiles")
+        .insert([{
+          id: data.user.id,
+          name: name.trim(),
+          dob,
+          email: email.trim().toLowerCase()
+        }]);
+
+      if (profileError) {
+        console.error("Profile insert after register failed:", profileError.message);
+      }
     }
 
     res.status(201).json({ ok: true, message: "Account created successfully" });
@@ -37,7 +45,7 @@ export async function register(req, res) {
 
 export async function login(req, res) {
   try {
-    const { email, password } = req.body;
+    const { email, password } = req.body ?? {};
 
     const errors = validateLoginBody({ email, password });
     if (errors) return res.status(400).json({ errors });
@@ -47,7 +55,19 @@ export async function login(req, res) {
       password
     });
 
-    if (error) return res.status(401).json({ error: "Invalid email or password" });
+    console.log("login error:", error?.message);
+    console.log("login user:", data?.user?.id);
+    console.log("login session exists:", !!data?.session);
+
+    if (error) {
+      return res.status(401).json({ error: error.message });
+    }
+
+    if (!data?.user || !data?.session?.access_token) {
+      return res.status(401).json({
+        error: "Login failed: no session returned"
+      });
+    }
 
     res.json({
       ok: true,
@@ -55,11 +75,11 @@ export async function login(req, res) {
       user: {
         id: data.user.id,
         email: data.user.email,
-        name: data.user.user_metadata?.name
+        name: data.user.user_metadata?.name ?? null
       }
     });
   } catch (err) {
-    console.error("Login error:", err.message);
+    console.error("Login error:", err);
     res.status(500).json({ error: err.message });
   }
 }
