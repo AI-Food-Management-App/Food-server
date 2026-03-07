@@ -3,7 +3,7 @@ import { addFridgeItem, getFridgeItems , getCategories} from "../controllers/fri
 
 const router = express.Router();
 router.post("/fridge/items",  addFridgeItem);
-router.get("/fridge/items", validate({ query: fridgeGetItemsQuerySchema }), getFridgeItems);
+router.get("/fridge/items", getFridgeItems);
 router.get("/fridge/categories", getCategories);
 
 export default router;
