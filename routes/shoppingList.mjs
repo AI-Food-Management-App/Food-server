@@ -1,6 +1,4 @@
 import express from "express";
-import { validate } from "../middleware/validate.mjs";
-import { createShoppingListBody, listIdParams, listItemParams, addShoppingItemBody, toggleShoppingItemBody} from "../validators/shopping.schemas.mjs";
 import { supabase } from "../db/supabase.mjs";
 
 const router = express.Router();

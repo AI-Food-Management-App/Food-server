@@ -10,7 +10,10 @@ import mlRoutes from "./routes/ml.routes.mjs";
 export function createApp() {
   const app = express();
 
-  app.use(cors({ origin: ["http://localhost:4200"], credentials: true }));
+  app.use(cors({
+    origin: true,
+    credentials: true
+  }));
   app.use(express.json());
   app.use(bodyParser.json());
 

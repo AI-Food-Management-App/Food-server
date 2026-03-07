@@ -11,16 +11,14 @@ export const fridgeAddItemBody = z.object({
   CategoryID: zCoerceNumber.int().positive().optional(),
   expiryDate: z
     .string()
-    .datetime({ offset: true })
     .optional()
     .or(z.literal(null))
     .default(null),
 }).strict();
 
-export const fridgeGetItemsQuery = z.object({
-  // you said you want filter by CategoryID names; your FE may send CategoryID number
-  // We'll support either:
-  category: z.string().trim().min(1).optional(),      // category name
-  categoryId: zCoerceNumber.int().positive().optional(), // category id
+import { z } from "zod";
+
+export const fridgeGetItemsQuerySchema = z.object({
+  categoryId: z.coerce.number().int().positive().optional(),
   search: z.string().trim().min(1).optional(),
 }).strict();

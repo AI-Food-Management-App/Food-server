@@ -1,30 +1,42 @@
 import { ZodError } from "zod";
 
-/**
- * validate({ body?, query?, params? })
- * - Validates req.body/req.query/req.params against provided Zod schemas.
- * - On success: replaces those objects with parsed results (typed/cleaned).
- * - On failure: returns 400 with details.
- */
+function formatZodError(err) {
+  return err.issues.map((i) => ({
+    path: i.path.join("."),
+    message: i.message,
+    code: i.code,
+  }));
+}
+
 export function validate(schemas = {}) {
   return (req, res, next) => {
     try {
-      if (schemas.body) req.body = schemas.body.parse(req.body);
-      if (schemas.query) req.query = schemas.query.parse(req.query);
-      if (schemas.params) req.params = schemas.params.parse(req.params);
+      req.validated = {};
+
+      if (schemas.body) {
+        req.validated.body = schemas.body.parse(req.body);
+      }
+
+      if (schemas.query) {
+        req.validated.query = schemas.query.parse(req.query);
+      }
+
+      if (schemas.params) {
+        req.validated.params = schemas.params.parse(req.params);
+      }
 
       return next();
     } catch (err) {
       if (err instanceof ZodError) {
         return res.status(400).json({
           error: "Validation failed",
-          issues: err.issues.map((i) => ({
-            path: i.path.join("."),
-            message: i.message,
-          })),
+          issues: formatZodError(err),
         });
       }
-      return res.status(400).json({ error: err?.message || "Validation failed" });
+
+      return res.status(400).json({
+        error: err?.message || "Validation failed",
+      });
     }
   };
 }
