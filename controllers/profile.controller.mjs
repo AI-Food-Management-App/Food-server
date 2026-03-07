@@ -4,13 +4,19 @@ import { validateProfileUpdate } from "../validators/profile.validators.mjs";
 // GET /api/profile
 export async function getProfile(req, res) {
   try {
+    console.log("getProfile called for user:", req.user.id); 
+
     const { data, error } = await supabase
       .from("profiles")
       .select("id, name, dob, email, allergies, created_at")
       .eq("id", req.user.id)
       .single();
 
-    if (error) throw error;
+    if (error) {
+      console.error("Supabase getProfile error:", error.message, error.code); 
+      throw error;
+    }
+
     if (!data) return res.status(404).json({ error: "Profile not found" });
 
     res.json(data);
@@ -25,6 +31,9 @@ export async function updateProfile(req, res) {
   try {
     const { name, dob, allergies } = req.body;
 
+    console.log("updateProfile called for user:", req.user.id); // debug
+    console.log("Update payload:", { name, dob, allergies });   
+
     const errors = validateProfileUpdate({ name, dob, allergies });
     if (errors) return res.status(400).json({ errors });
 
@@ -33,22 +42,30 @@ export async function updateProfile(req, res) {
     if (dob       !== undefined) updates.dob       = dob;
     if (allergies !== undefined) updates.allergies = allergies;
 
+    console.log("Sending to Supabase:", updates); 
+
     const { data, error } = await supabase
       .from("profiles")
       .update(updates)
       .eq("id", req.user.id)
-      .select("id, name, dob, email, allergies, created_at")
-      .single();
+      .select("id, name, dob, email, allergies, created_at");
+
+    console.log("Supabase update result:", data, error?.message); 
 
     if (error) throw error;
 
-    res.json({ ok: true, profile: data });
+    const updated = Array.isArray(data) ? data[0] : data;
+
+    if (!updated) {
+      return res.status(404).json({ error: "Profile not found or update blocked" });
+    }
+
+    res.json({ ok: true, profile: updated });
   } catch (err) {
     console.error("updateProfile error:", err.message);
     res.status(500).json({ error: err.message });
   }
 }
-
 // DELETE /api/profile
 export async function deleteProfile(req, res) {
   try {

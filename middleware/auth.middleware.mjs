@@ -1,20 +1,30 @@
 import { supabase } from "../db/supabase.mjs";
 
 export async function requireAuth(req, res, next) {
-  const authHeader = req.headers.authorization;
+  try {
+    const authHeader = req.headers.authorization;
 
-  if (!authHeader?.startsWith("Bearer ")) {
-    return res.status(401).json({ error: "Unauthorized — no token provided" });
+    console.log("requireAuth hit — header present:", !!authHeader); // debug log
+
+    if (!authHeader?.startsWith("Bearer ")) {
+      return res.status(401).json({ error: "Unauthorized — no token provided" });
+    }
+
+    const token = authHeader.split(" ")[1];
+
+    const { data, error } = await supabase.auth.getUser(token);
+
+    console.log("Supabase getUser result:", data?.user?.id, error?.message); 
+
+    if (error || !data?.user) {
+      return res.status(401).json({ error: "Invalid or expired token" });
+    }
+
+    req.user = data.user;
+    next();
+
+  } catch (err) {
+    console.error("requireAuth crashed:", err.message); // 
+    return res.status(500).json({ error: "Auth check failed" });
   }
-
-  const token = authHeader.split(" ")[1];
-
-  // Supabase verifies the JWT and returns the user
-  const { data, error } = await supabase.auth.getUser(token);
-
-  if (error || !data.user) {
-    return res.status(401).json({ error: "Invalid or expired token" });
-  }
-
-  req.user = data.user; 
 }

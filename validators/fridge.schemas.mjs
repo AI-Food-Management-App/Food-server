@@ -16,8 +16,6 @@ export const fridgeAddItemBody = z.object({
     .default(null),
 }).strict();
 
-import { z } from "zod";
-
 export const fridgeGetItemsQuerySchema = z.object({
   categoryId: z.coerce.number().int().positive().optional(),
   search: z.string().trim().min(1).optional(),
