@@ -2,27 +2,22 @@ import "./loadEnvironment.mjs";
 import express from "express";
 import cors from "cors";
 import bodyParser from "body-parser";
-
 import shoppingListRoutes from "./routes/shoppingList.mjs";
 import fridgeRoutes from "./routes/fridge.routes.mjs";
 import mlRoutes from "./routes/ml.routes.mjs";
 
-//using supabase for testing 
+
 import { supabase } from "./db/supabase.mjs";
+import profileRoutes from "./routes/profile.routes.mjs";
 
 const app = express();
 const PORT = process.env.PORT || 5050;
 
-//app.use(cors({ origin: ["http://localhost:4200"], credentials: true }));
 
-app.use(cors({
-  origin: true,
-  credentials: true
-}));
-
+app.use(cors({ origin: ["http://localhost:4200"], credentials: true }));
 app.use(express.json());
-app.use(bodyParser.json());
 
+// routes
 app.use("/api", shoppingListRoutes);
 app.use("/api", fridgeRoutes);
 app.use("/api", mlRoutes);
