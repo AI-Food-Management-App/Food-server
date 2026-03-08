@@ -16,10 +16,17 @@ const PORT = process.env.PORT || 5050;
 app.use(cors({ origin: ["http://localhost:4200"], credentials: true })); 
 app.use(express.json()); 
 // routes app.use("/api", authRoutes); 
-app.use("/api", requireAuth, fridgeRoutes); 
-app.use("/api", requireAuth, shoppingListRoutes); 
-app.use("/api", requireAuth, mlRoutes); 
-app.use("/api", requireAuth, profileRoutes); 
+// app.use("/api", requireAuth, fridgeRoutes); 
+// app.use("/api", requireAuth, shoppingListRoutes); 
+// app.use("/api", requireAuth, mlRoutes); 
+// app.use("/api", requireAuth, profileRoutes); 
+
+
+app.use("/api", fridgeRoutes); 
+app.use("/api", shoppingListRoutes); 
+app.use("/api", mlRoutes); 
+app.use("/api", profileRoutes); 
+
 
 // Supabase test 
 (async () => { 
