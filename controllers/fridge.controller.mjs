@@ -78,6 +78,9 @@ export async function addFridgeItem(req, res) {
 //getting fridge items/ingredients as theyre often referred to
 export async function getFridgeItems(req, res) {
   try {
+    console.log("getFridgeItems hit");
+    console.log("raw query:", req.query);
+
     const categoryId = req.query.categoryId ? Number(req.query.categoryId) : null;
     const search = req.query.search || null;
 
@@ -98,6 +101,10 @@ export async function getFridgeItems(req, res) {
     if (search) q = q.ilike("name", `%${search}%`);
 
     const { data, error } = await q;
+
+    console.log("getFridgeItems supabase error:", error);
+    console.log("getFridgeItems rows:", data?.length ?? 0);
+
     if (error) throw error;
 
     const items = (data ?? []).map(r => ({
@@ -111,7 +118,7 @@ export async function getFridgeItems(req, res) {
 
     res.json(items);
   } catch (err) {
-    console.error("getFridgeItems error:", err.message);
+    console.error("getFridgeItems error full:", err);
     res.status(500).json({ error: err.message });
   }
 }
