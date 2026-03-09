@@ -11,7 +11,7 @@ import { supabase } from "./db/supabase.mjs";
 const app = express();
 const PORT = process.env.PORT || 5050;
 
-app.use(cors({ origin: ["http://localhost:4200"], credentials: true }));
+app.use(cors({ origin: true, credentials: true }));
 app.use(express.json());
 
 app.use("/api", authRoutes);
