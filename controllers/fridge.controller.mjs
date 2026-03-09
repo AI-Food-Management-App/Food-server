@@ -6,30 +6,30 @@ import { resolveCategoryFromCatalogue } from "./catalogue.helpers.mjs";
 // body: { name, quantityDelta?, expiryDate? }
 export async function addFridgeItem(req, res) {
   try {
-
     const name = String(req.body.name ?? "").trim();
     if (!name) return res.status(400).json({ error: "name is required" });
 
     const delta = Number(req.body.quantityDelta ?? 1);
     const quantityDelta = Number.isFinite(delta) ? delta : 1;
 
-    // expiryDate can be null or "YYYY-MM-DD"
     const expiryDateRaw = req.body.expiryDate ?? null;
     const expiryDate = expiryDateRaw ? String(expiryDateRaw) : null;
 
-    // categorize via catalogue match (partial/fuzzy)
-    const { CategoryID } = await resolveCategoryFromCatalogue(name, 22);
+    const manualCategoryId = req.body.CategoryID ? Number(req.body.CategoryID) : null;
+    const description = req.body.description ? String(req.body.description).trim() : null;
+    const tags = Array.isArray(req.body.tags)
+      ? req.body.tags.map(t => String(t).trim()).filter(Boolean)
+      : [];
 
-    // find existing inventory row by SAME user-entered name (case-insensitive)
-    // If you want expiryDate to create separate rows, uncomment the .eq/.is logic below.
+    const resolved = await resolveCategoryFromCatalogue(name, 22);
+    const resolvedCategoryId = resolved?.CategoryID ?? 22;
+    const finalCategoryId = manualCategoryId || resolvedCategoryId;
+
     let q = supabase
       .from("Ingredients")
-      .select("IngredientID, name, quantity, CategoryID, expiryDate")
+      .select("IngredientID, name, quantity, CategoryID, expiryDate, description, tags")
       .ilike("name", name)
       .limit(1);
-
-    // Optional: treat same name but different expiryDate as different rows:
-    // q = expiryDate ? q.eq("expiryDate", expiryDate) : q.is("expiryDate", null);
 
     const { data: existing, error: findErr } = await q;
     if (findErr) throw findErr;
@@ -42,29 +42,32 @@ export async function addFridgeItem(req, res) {
         .from("Ingredients")
         .update({
           quantity: newQty,
-          CategoryID: row.CategoryID ?? CategoryID, // keep existing if already set
-          expiryDate: expiryDate ?? row.expiryDate, // only set if provided
+          CategoryID: finalCategoryId ?? row.CategoryID,
+          expiryDate: expiryDate ?? row.expiryDate,
+          description: description ?? row.description ?? null,
+          tags: tags.length ? tags : row.tags ?? []
         })
         .eq("IngredientID", row.IngredientID)
-        .select("IngredientID, name, quantity, CategoryID, expiryDate")
+        .select("IngredientID, name, quantity, CategoryID, expiryDate, description, tags")
         .single();
 
       if (updErr) throw updErr;
       return res.json({ ok: true, item: updated, created: false });
     }
 
-    // create new row (store user-entered name)
     const { data: created, error: createErr } = await supabase
       .from("Ingredients")
       .insert([
         {
           name,
           quantity: quantityDelta,
-          CategoryID,
+          CategoryID: finalCategoryId,
           expiryDate,
-        },
+          description,
+          tags
+        }
       ])
-      .select("IngredientID, name, quantity, CategoryID, expiryDate")
+      .select("IngredientID, name, quantity, CategoryID, expiryDate, description, tags")
       .single();
 
     if (createErr) throw createErr;
@@ -75,6 +78,8 @@ export async function addFridgeItem(req, res) {
     res.status(500).json({ error: err.message });
   }
 }
+
+
 //getting fridge items/ingredients as theyre often referred to
 export async function getFridgeItems(req, res) {
   try {
@@ -84,18 +89,24 @@ export async function getFridgeItems(req, res) {
     const categoryId = req.query.categoryId ? Number(req.query.categoryId) : null;
     const search = req.query.search || null;
 
+    //added for tag filtering, not currently used but will be in the future
+    const tag = req.query.tag || null;
+    if (tag) q = q.contains("tags", [tag]);
+
     let q = supabase
-      .from("Ingredients")
-      .select(`
-        IngredientID,
-        name,
-        quantity,
-        expiryDate,
-        CategoryID,
-        categories ( name )
-      `)
-      .gt("quantity", 0)
-      .order("name", { ascending: true });
+    .from("Ingredients")
+    .select(`
+      IngredientID,
+      name,
+      quantity,
+      expiryDate,
+      CategoryID,
+      description,
+      tags,
+      categories ( name )
+    `)
+    .gt("quantity", 0)
+    .order("name", { ascending: true });
 
     if (categoryId) q = q.eq("CategoryID", categoryId);
     if (search) q = q.ilike("name", `%${search}%`);
@@ -108,13 +119,15 @@ export async function getFridgeItems(req, res) {
     if (error) throw error;
 
     const items = (data ?? []).map(r => ({
-      IngredientID: r.IngredientID,
-      name: r.name,
-      quantity: r.quantity,
-      expiryDate: r.expiryDate ?? null,
-      CategoryID: r.CategoryID,
-      category: r.categories?.name ?? "Other / Uncategorized",
-    }));
+    IngredientID: r.IngredientID,
+    name: r.name,
+    quantity: r.quantity,
+    expiryDate: r.expiryDate ?? null,
+    CategoryID: r.CategoryID,
+    category: r.categories?.name ?? "Other / Uncategorized",
+    description: r.description ?? null,
+    tags: r.tags ?? []
+  }));
 
     res.json(items);
   } catch (err) {
@@ -135,6 +148,62 @@ export async function getCategories(_req, res) {
     res.json(data ?? []);
   } catch (err) {
     console.error("getCategories error:", err.message);
+    res.status(500).json({ error: err.message });
+  }
+}
+//updating the items 
+export async function updateFridgeItem(req, res) {
+  try {
+    const itemId = Number(req.params.itemId);
+    if (!Number.isFinite(itemId)) {
+      return res.status(400).json({ error: "Invalid itemId" });
+    }
+
+    const updates = {};
+
+    if (req.body.CategoryID !== undefined) {
+      updates.CategoryID = Number(req.body.CategoryID);
+    }
+
+    if (req.body.quantity !== undefined) {
+      updates.quantity = Number(req.body.quantity);
+    }
+
+    if (req.body.expiryDate !== undefined) {
+      updates.expiryDate = req.body.expiryDate || null;
+    }
+
+    if (req.body.description !== undefined) {
+      updates.description = req.body.description ? String(req.body.description).trim() : null;
+    }
+
+    if (req.body.tags !== undefined) {
+      updates.tags = Array.isArray(req.body.tags)
+        ? req.body.tags.map(t => String(t).trim()).filter(Boolean)
+        : [];
+    }
+
+    const { data, error } = await supabase
+      .from("Ingredients")
+      .update(updates)
+      .eq("IngredientID", itemId)
+      .select(`
+        IngredientID,
+        name,
+        quantity,
+        expiryDate,
+        CategoryID,
+        description,
+        tags,
+        categories ( name )
+      `)
+      .single();
+
+    if (error) throw error;
+
+    res.json(data);
+  } catch (err) {
+    console.error("updateFridgeItem error:", err.message);
     res.status(500).json({ error: err.message });
   }
 }
