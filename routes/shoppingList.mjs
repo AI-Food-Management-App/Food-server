@@ -1,6 +1,6 @@
 import express from "express";
-//import { supabase } from "../db/supabase.mjs";
-import { getSupabaseUserClient } from "../db/supabaseUser.mjs";
+import { supabase } from "../db/supabase.mjs";
+
 
 const router = express.Router();
 
@@ -38,9 +38,8 @@ async function getOrCreateIngredientId({ supabase, name }) {
  * POST /api/shopping-lists
  * body: { userID }
  */
-router.post("/shopping-lists", async (req, res) => {
+router.post("/shopping-lists", async (_req, res) => {
   try {
-    const supabase = getSupabaseUserClient(req.accessToken);
     const { data, error } = await supabase
       .from("ShoppingLists")
       .insert([{}])
@@ -67,9 +66,11 @@ router.post("/shopping-lists", async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+
+
 router.get("/shopping-lists", async (_req, res) => {
   try {
-    const supabase = getSupabaseUserClient(req.accessToken);
+
     const { data, error } = await supabase
       .from("ShoppingLists")
       .select("*")
@@ -89,7 +90,6 @@ router.get("/shopping-lists", async (_req, res) => {
  */
 router.get("/shopping-lists/:listID",  async (req, res) => {
   try {
-    const supabase = getSupabaseUserClient(req.accessToken);
 
     const listID = Number(req.params.listID);
 
@@ -136,7 +136,6 @@ router.get("/shopping-lists/:listID",  async (req, res) => {
  */
 router.post("/shopping-lists/:listID/items", async (req, res) => {
   try {
-    const supabase = getSupabaseUserClient(req.accessToken);
     const listID = Number(req.params.listID);
     const name = String(req.body.name ?? "");
     const quantity = req.body.quantity ?? null;
@@ -172,8 +171,6 @@ router.patch("/shopping-lists/:listID/items/:itemID",  async (req, res) => {
     const itemID = Number(req.params.itemID);
     const checked = Boolean(req.body.checked);
 
-    const supabase = getSupabaseUserClient(req.accessToken);
-
     
     const { data, error } = await supabase
       .from("ShoppingListItems")
@@ -199,7 +196,6 @@ router.patch("/shopping-lists/:listID/items/:itemID",  async (req, res) => {
  */
 router.delete("/shopping-lists/:listID/items/:itemID",  async (req, res) => {
   try {
-    const supabase = getSupabaseUserClient(req.accessToken);
     const itemID = Number(req.params.itemID);
 
     const { error } = await supabase
