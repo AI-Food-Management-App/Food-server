@@ -205,10 +205,17 @@ router.post("/shopping-lists/:listID/items", async (req, res) => {
   try {
     const listID = Number(req.params.listID);
     const name = String(req.body.name ?? "").trim();
-    const quantity = req.body.quantity ?? null;
 
     if (!name) {
       return res.status(400).json({ error: "Item name is required" });
+    }
+
+    let quantity = Number(req.body.quantity ?? 1);
+    if (!Number.isFinite(quantity)) quantity = 1;
+    quantity = Math.floor(quantity);
+
+    if (quantity < 1) {
+      return res.status(400).json({ error: "Quantity must be at least 1" });
     }
 
     const { data: list, error: listErr } = await supabase
