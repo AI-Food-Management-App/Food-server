@@ -7,6 +7,8 @@ import mlRoutes from "./routes/ml.routes.mjs";
 import authRoutes from "./routes/auth.routes.mjs";
 import profileRoutes from "./routes/profile.routes.mjs";
 import { supabase } from "./db/supabase.mjs";
+import fs from "fs";
+import dotenv from "dotenv";
 
 const app = express();
 const PORT = process.env.PORT || 5050;
