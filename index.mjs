@@ -11,7 +11,23 @@ import { supabase } from "./db/supabase.mjs";
 const app = express();
 const PORT = process.env.PORT || 5050;
 
-app.use(cors({ origin: true, credentials: true }));
+if (!fs.existsSync("uploads")) {
+  fs.mkdirSync("uploads");
+}
+
+const allowedOrigins = [
+  "http://localhost:4200",
+  process.env.FRONTEND_URL,        
+].filter(Boolean);                 
+app.use(cors({
+  origin: (origin, callback) => {
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.includes(origin)) return callback(null, true);
+    callback(new Error(`CORS blocked for origin: ${origin}`));
+  },
+  credentials: true
+}));
+
 app.use(express.json());
 
 app.use("/api", authRoutes);
@@ -22,7 +38,10 @@ app.use("/api", profileRoutes);
 
 (async () => {
   try {
-    const { error } = await supabase.from("Ingredients").select("IngredientID").limit(1);
+    const { error } = await supabase
+      .from("Ingredients")
+      .select("IngredientID")
+      .limit(1);
     if (error) throw error;
     console.log("Supabase connected successfully");
   } catch (err) {
@@ -30,6 +49,7 @@ app.use("/api", profileRoutes);
   }
 })();
 
+// Global error handler
 app.use((err, _req, res, _next) => {
   console.error("Unhandled server error:", err);
   res.status(500).json({ error: err.message || "Unexpected server error" });
