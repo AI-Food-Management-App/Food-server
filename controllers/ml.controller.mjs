@@ -17,19 +17,42 @@ export async function detectImages(req, res) {
       return res.status(500).json({ error: "ML_SERVICE_URL is not configured on the server" });
     }
 
+    try {
+      await axios.get(`${process.env.ML_SERVICE_URL}/health`, {
+        timeout: 15000
+      });
+    } catch (healthErr) {
+      console.error("ML service health check failed:", {
+        name: healthErr?.name,
+        message: healthErr?.message,
+        code: healthErr?.code,
+        status: healthErr?.response?.status,
+        data: healthErr?.response?.data
+      });
+
+      return res.status(503).json({
+        error: "ML detection service is unavailable right now. Please try again in a few seconds."
+      });
+    }
+
     const results = [];
 
     for (const file of req.files) {
       try {
+        const fileBuffer = fs.readFileSync(file.path);
+
         const form = new FormData();
-        form.append("image", fs.createReadStream(file.path), file.originalname);
+        form.append("image", fileBuffer, {
+          filename: file.originalname,
+          contentType: file.mimetype || "image/jpeg"
+        });
 
         const response = await axios.post(
           `${process.env.ML_SERVICE_URL}/detect`,
           form,
           {
             headers: form.getHeaders(),
-            timeout: 30000
+            timeout: 60000
           }
         );
 
@@ -60,27 +83,33 @@ export async function detectImages(req, res) {
           quantity: 1,
           error: null
         });
-} catch (err) {
-      console.error("detectImages per-file error:", {
-        file: file.originalname,
-        message: err?.message,
-        responseStatus: err?.response?.status,
-        responseData: err?.response?.data
-      });
+      } catch (err) {
+        console.error("detectImages per-file error:", {
+          file: file.originalname,
+          name: err?.name,
+          message: err?.message,
+          code: err?.code,
+          cause: err?.cause,
+          stack: err?.stack,
+          responseStatus: err?.response?.status,
+          responseData: err?.response?.data,
+          axios: typeof err?.toJSON === "function" ? err.toJSON() : null
+        });
 
-      results.push({
-        tempId: file.filename,
-        originalFilename: file.originalname,
-        ingredient: null,
-        categoryId: null,
-        categoryName: null,
-        quantity: 1,
-        error:
-          err?.response?.data?.error ||
-          err?.response?.data?.detail ||
-          err?.message ||
-          "Detection failed"
-      });
+        results.push({
+          tempId: file.filename,
+          originalFilename: file.originalname,
+          ingredient: null,
+          categoryId: null,
+          categoryName: null,
+          quantity: 1,
+          error:
+            err?.response?.data?.error ||
+            err?.response?.data?.detail ||
+            err?.code ||
+            err?.message ||
+            "Detection failed"
+        });
       } finally {
         fs.unlink(file.path, () => {});
       }
