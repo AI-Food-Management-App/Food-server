@@ -31,16 +31,12 @@ export async function detectImages(req, res) {
         timeout: 15000
       });
     } catch (healthErr) {
-      console.error("ML service health check failed:", {
+      console.warn("ML health check failed, continuing anyway:", {
         name: healthErr?.name,
         message: healthErr?.message,
         code: healthErr?.code,
         status: healthErr?.response?.status,
         data: healthErr?.response?.data
-      });
-
-      return res.status(503).json({
-        error: "ML detection service is unavailable right now. Please try again in a few seconds."
       });
     }
 
