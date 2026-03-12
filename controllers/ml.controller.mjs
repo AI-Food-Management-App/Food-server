@@ -3,7 +3,6 @@ import axios from "axios";
 import fs from "fs";
 import FormData from "form-data";
 import { supabase } from "../db/supabase.mjs";
-import { resolveCategoryFromCatalogue } from "./catalogue.helpers.mjs";
 
 export const upload = multer({ dest: "uploads/" });
 
@@ -26,109 +25,96 @@ export async function detectImages(req, res) {
       return res.status(500).json({ error: "ML_SERVICE_URL is not configured on the server" });
     }
 
-    try {
-      await axios.get(`${process.env.ML_SERVICE_URL}/health`, {
-        timeout: 15000
-      });
-    } catch (healthErr) {
-      console.warn("ML health check failed, continuing anyway:", {
-        name: healthErr?.name,
-        message: healthErr?.message,
-        code: healthErr?.code,
-        status: healthErr?.response?.status,
-        data: healthErr?.response?.data
+    const form = new FormData();
+
+    for (const file of req.files) {
+      const fileBuffer = fs.readFileSync(file.path);
+      form.append("images", fileBuffer, {
+        filename: file.originalname,
+        contentType: file.mimetype || "image/jpeg",
+        knownLength: fileBuffer.length
       });
     }
 
-    const results = [];
+    const contentLength = await getFormLength(form);
 
-    for (const file of req.files) {
-      try {
-        const fileBuffer = fs.readFileSync(file.path);
-
-        const form = new FormData();
-        form.append("image", fileBuffer, {
-          filename: file.originalname,
-          contentType: file.mimetype || "image/jpeg",
-          knownLength: fileBuffer.length
-        });
-
-        const contentLength = await getFormLength(form);
-
-        const response = await axios.post(
-          `${process.env.ML_SERVICE_URL}/detect`,
-          form,
-          {
-            headers: {
-              ...form.getHeaders(),
-              "Content-Length": contentLength
-            },
-            timeout: 60000,
-            maxBodyLength: Infinity,
-            maxContentLength: Infinity
-          }
-        );
-
-        const ingredient = response.data?.ingredient?.trim?.() || null;
-
-        let categoryId = 22;
-        let categoryName = "Other / Uncategorized";
-
-        if (ingredient) {
-          const resolved = await resolveCategoryFromCatalogue(ingredient, 22);
-          categoryId = resolved?.CategoryID ?? 22;
-
-          const { data: categoryRow } = await supabase
-            .from("categories")
-            .select("name")
-            .eq("CategoryID", categoryId)
-            .maybeSingle();
-
-          categoryName = categoryRow?.name ?? "Other / Uncategorized";
+    let pythonResponse;
+    try {
+      pythonResponse = await axios.post(
+        `${process.env.ML_SERVICE_URL}/detect-images`,
+        form,
+        {
+          headers: {
+            ...form.getHeaders(),
+            "Content-Length": contentLength
+          },
+          timeout: 120000,
+          maxBodyLength: Infinity,
+          maxContentLength: Infinity
         }
+      );
+    } catch (err) {
+      console.error("Batch ML detect error:", {
+        name: err?.name,
+        message: err?.message,
+        code: err?.code,
+        responseStatus: err?.response?.status,
+        responseData: err?.response?.data
+      });
 
-        results.push({
-          tempId: file.filename,
-          originalFilename: file.originalname,
-          ingredient,
-          categoryId,
-          categoryName,
-          quantity: 1,
-          error: null
-        });
-      } catch (err) {
-        console.error("detectImages per-file error:", {
-          file: file.originalname,
-          name: err?.name,
-          message: err?.message,
-          code: err?.code,
-          responseStatus: err?.response?.status,
-          responseData: err?.response?.data,
-          axios: typeof err?.toJSON === "function" ? err.toJSON() : null
-        });
-
-        results.push({
-          tempId: file.filename,
-          originalFilename: file.originalname,
-          ingredient: null,
-          categoryId: null,
-          categoryName: null,
-          quantity: 1,
-          error:
-            err?.response?.data?.error ||
-            err?.response?.data?.detail ||
-            err?.code ||
-            err?.message ||
-            "Detection failed"
-        });
-      } finally {
+      return res.status(500).json({
+        error:
+          err?.response?.data?.error ||
+          err?.response?.data?.detail ||
+          err?.message ||
+          "Batch detection failed"
+      });
+    } finally {
+      for (const file of req.files) {
         fs.unlink(file.path, () => {});
       }
     }
 
+    const pythonResults = pythonResponse.data?.results ?? [];
+
+    const enrichedResults = [];
+
+    for (const result of pythonResults) {
+      let categoryId = 22;
+      let categoryName = "Other / Uncategorized";
+
+      if (result.ingredient) {
+        const { data: categoryRow } = await supabase
+          .from("categories")
+          .select("CategoryID, name")
+          .ilike("name", "%")
+          .eq("CategoryID", 22)
+          .maybeSingle();
+
+        if (result.categoryId) {
+          categoryId = result.categoryId;
+        }
+        if (result.categoryName) {
+          categoryName = result.categoryName;
+        } else if (categoryRow?.name) {
+          categoryName = categoryRow.name;
+        }
+      }
+
+      enrichedResults.push({
+        tempId: result.tempId ?? result.filename ?? `${Date.now()}-${Math.random()}`,
+        originalFilename: result.originalFilename ?? result.filename ?? "image",
+        ingredient: result.ingredient ?? null,
+        categoryId,
+        categoryName,
+        quantity: 1,
+        error: result.error ?? null
+      });
+    }
+
     return res.json({
       ok: true,
-      results
+      results: enrichedResults
     });
   } catch (err) {
     console.error("detectImages error:", err?.message || err);
