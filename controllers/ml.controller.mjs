@@ -26,20 +26,6 @@ export async function detectImages(req, res) {
       return res.status(500).json({ error: "ML_SERVICE_URL is not configured on the server" });
     }
 
-    try {
-      await axios.get(`${process.env.ML_SERVICE_URL}/health`, {
-        timeout: 15000
-      });
-    } catch (healthErr) {
-      console.warn("ML health check failed, continuing anyway:", {
-        name: healthErr?.name,
-        message: healthErr?.message,
-        code: healthErr?.code,
-        status: healthErr?.response?.status,
-        data: healthErr?.response?.data
-      });
-    }
-
     const results = [];
 
     for (const file of req.files) {
@@ -63,7 +49,7 @@ export async function detectImages(req, res) {
               ...form.getHeaders(),
               "Content-Length": contentLength
             },
-            timeout: 60000,
+            timeout: 120000,
             maxBodyLength: Infinity,
             maxContentLength: Infinity
           }
@@ -103,8 +89,7 @@ export async function detectImages(req, res) {
           message: err?.message,
           code: err?.code,
           responseStatus: err?.response?.status,
-          responseData: err?.response?.data,
-          axios: typeof err?.toJSON === "function" ? err.toJSON() : null
+          responseData: err?.response?.data
         });
 
         results.push({
@@ -117,7 +102,6 @@ export async function detectImages(req, res) {
           error:
             err?.response?.data?.error ||
             err?.response?.data?.detail ||
-            err?.code ||
             err?.message ||
             "Detection failed"
         });
