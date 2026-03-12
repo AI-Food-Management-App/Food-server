@@ -60,16 +60,27 @@ export async function detectImages(req, res) {
           quantity: 1,
           error: null
         });
-      } catch (err) {
-        results.push({
-          tempId: file.filename,
-          originalFilename: file.originalname,
-          ingredient: null,
-          categoryId: null,
-          categoryName: null,
-          quantity: 1,
-          error: err?.message || "Detection failed"
-        });
+} catch (err) {
+      console.error("detectImages per-file error:", {
+        file: file.originalname,
+        message: err?.message,
+        responseStatus: err?.response?.status,
+        responseData: err?.response?.data
+      });
+
+      results.push({
+        tempId: file.filename,
+        originalFilename: file.originalname,
+        ingredient: null,
+        categoryId: null,
+        categoryName: null,
+        quantity: 1,
+        error:
+          err?.response?.data?.error ||
+          err?.response?.data?.detail ||
+          err?.message ||
+          "Detection failed"
+      });
       } finally {
         fs.unlink(file.path, () => {});
       }
