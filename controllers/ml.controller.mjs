@@ -7,83 +7,149 @@ import { resolveCategoryFromCatalogue } from "./catalogue.helpers.mjs";
 
 export const upload = multer({ dest: "uploads/" });
 
-export async function detectAndSave(req, res) {
+export async function detectImages(req, res) {
   try {
-    if (!req.file) return res.status(400).json({ error: "No file uploaded" });
-
-    // ← shows in Render logs so you can confirm the URL is set
-    console.log("ML_SERVICE_URL is:", process.env.ML_SERVICE_URL ?? "NOT SET");
+    if (!req.files || !req.files.length) {
+      return res.status(400).json({ error: "No images uploaded" });
+    }
 
     if (!process.env.ML_SERVICE_URL) {
       return res.status(500).json({ error: "ML_SERVICE_URL is not configured on the server" });
     }
-    const form = new FormData();
-    form.append("image", fs.createReadStream(req.file.path));
 
-    const response = await axios.post(
-      `${process.env.ML_SERVICE_URL}/detect`,
-      form,
-      {
-        headers: form.getHeaders(),
-        timeout: 30000
+    const results = [];
+
+    for (const file of req.files) {
+      try {
+        const form = new FormData();
+        form.append("image", fs.createReadStream(file.path), file.originalname);
+
+        const response = await axios.post(
+          `${process.env.ML_SERVICE_URL}/detect`,
+          form,
+          {
+            headers: form.getHeaders(),
+            timeout: 30000
+          }
+        );
+
+        const ingredient = response.data?.ingredient?.trim?.() || null;
+
+        let categoryId = 22;
+        let categoryName = "Other / Uncategorized";
+
+        if (ingredient) {
+          const resolved = await resolveCategoryFromCatalogue(ingredient, 22);
+          categoryId = resolved?.CategoryID ?? 22;
+
+          const { data: categoryRow } = await supabase
+            .from("categories")
+            .select("name")
+            .eq("CategoryID", categoryId)
+            .maybeSingle();
+
+          categoryName = categoryRow?.name ?? "Other / Uncategorized";
+        }
+
+        results.push({
+          tempId: file.filename,
+          originalFilename: file.originalname,
+          ingredient,
+          categoryId,
+          categoryName,
+          quantity: 1,
+          error: null
+        });
+      } catch (err) {
+        results.push({
+          tempId: file.filename,
+          originalFilename: file.originalname,
+          ingredient: null,
+          categoryId: null,
+          categoryName: null,
+          quantity: 1,
+          error: err?.message || "Detection failed"
+        });
+      } finally {
+        fs.unlink(file.path, () => {});
       }
-    );
-
-    fs.unlink(req.file.path, () => {});
-
-    const ingredient = response.data?.ingredient?.trim?.() || null;
-    if (!ingredient) return res.json({ ok: true, ingredient: null, saved: false });
-
-    // ↓ was: resolveCategoryFromCatalogue(name, 22) — name is undefined
-    const { CategoryID } = await resolveCategoryFromCatalogue(ingredient, 22);
-
-    // ↓ was: .ilike("name", name) — name is undefined
-    const { data: existing, error: findErr } = await supabase
-      .from("Ingredients")
-      .select("IngredientID, quantity, CategoryID")
-      .ilike("name", ingredient)
-      .limit(1);
-
-    if (findErr) throw findErr;
-
-    if (existing?.length) {
-      const row = existing[0];
-      const newQty = Number(row.quantity ?? 0) + 1;
-
-      const { error: updErr } = await supabase
-        .from("Ingredients")
-        .update({ quantity: newQty, CategoryID: row.CategoryID ?? CategoryID })
-        .eq("IngredientID", row.IngredientID);
-
-      if (updErr) throw updErr;
-
-      // ↓ was: ingredient: name — name is undefined
-      return res.json({
-        ok: true,
-        ingredient,
-        CategoryID: row.CategoryID ?? CategoryID,
-        quantity: newQty,
-        updated: true
-      });
     }
-
-    // ↓ was: insert [{ name, ... }] — name is undefined
-    const { error: insErr } = await supabase
-      .from("Ingredients")
-      .insert([{ name: ingredient, quantity: 1, CategoryID }]);
-
-    if (insErr) throw insErr;
 
     return res.json({
       ok: true,
-      ingredient,
-      CategoryID,
-      quantity: 1,
-      created: true
+      results
     });
-
   } catch (err) {
-    console.error("detectAndSave error:", err?.message || err);
-    return res.status(500).json({ error: err?.message || "Failed to detect/save ingredient" });
+    console.error("detectImages error:", err?.message || err);
+    return res.status(500).json({ error: err?.message || "Failed to detect images" });
+  }
+}
+
+export async function saveDetectedItems(req, res) {
+  try {
+    const items = Array.isArray(req.body?.items) ? req.body.items : [];
+
+    if (!items.length) {
+      return res.status(400).json({ error: "No items provided" });
+    }
+
+    let savedCount = 0;
+
+    for (const rawItem of items) {
+      const name = String(rawItem?.name ?? "").trim();
+      if (!name) continue;
+
+      const quantityRaw = Number(rawItem?.quantity ?? 1);
+      const quantity = Number.isFinite(quantityRaw) && quantityRaw >= 1
+        ? Math.floor(quantityRaw)
+        : 1;
+
+      const manualCategoryId = rawItem?.CategoryID ? Number(rawItem.CategoryID) : null;
+      const resolved = await resolveCategoryFromCatalogue(name, 22);
+      const categoryId = manualCategoryId || resolved?.CategoryID || 22;
+
+      const { data: existing, error: findErr } = await supabase
+        .from("Ingredients")
+        .select("IngredientID, quantity, CategoryID")
+        .ilike("name", name)
+        .limit(1);
+
+      if (findErr) throw findErr;
+
+      if (existing?.length) {
+        const row = existing[0];
+        const newQty = Number(row.quantity ?? 0) + quantity;
+
+        const { error: updErr } = await supabase
+          .from("Ingredients")
+          .update({
+            quantity: newQty,
+            CategoryID: row.CategoryID ?? categoryId
+          })
+          .eq("IngredientID", row.IngredientID);
+
+        if (updErr) throw updErr;
+      } else {
+        const { error: insErr } = await supabase
+          .from("Ingredients")
+          .insert([{
+            name,
+            quantity,
+            CategoryID: categoryId
+          }]);
+
+        if (insErr) throw insErr;
+      }
+
+      savedCount++;
+    }
+
+    return res.json({
+      ok: true,
+      savedCount
+    });
+  } catch (err) {
+    console.error("saveDetectedItems error:", err?.message || err);
+    return res.status(500).json({ error: err?.message || "Failed to save detected items" });
   }
 }
