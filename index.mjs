@@ -33,6 +33,14 @@ app.use(cors({
 
 app.use(express.json());
 
+app.get("/", (req, res) => {
+  res.json({ 
+    status: "ok", 
+    service: "M.ai Food Server",
+    version: "1.0.0"
+  });
+});
+
 app.use("/api", authRoutes);
 app.use("/api", fridgeRoutes);
 app.use("/api", shoppingListRoutes);
