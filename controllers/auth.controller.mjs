@@ -55,18 +55,12 @@ export async function login(req, res) {
       password
     });
 
-    console.log("login error:", error?.message);
-    console.log("login user:", data?.user?.id);
-    console.log("login session exists:", !!data?.session);
-
     if (error) {
       return res.status(401).json({ error: error.message });
     }
 
     if (!data?.user || !data?.session?.access_token) {
-      return res.status(401).json({
-        error: "Login failed: no session returned"
-      });
+      return res.status(401).json({ error: "Login failed: no session returned" });
     }
 
     res.json({
