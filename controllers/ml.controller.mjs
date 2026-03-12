@@ -7,6 +7,15 @@ import { resolveCategoryFromCatalogue } from "./catalogue.helpers.mjs";
 
 export const upload = multer({ dest: "uploads/" });
 
+function getFormLength(form) {
+  return new Promise((resolve, reject) => {
+    form.getLength((err, length) => {
+      if (err) reject(err);
+      else resolve(length);
+    });
+  });
+}
+
 export async function detectImages(req, res) {
   try {
     if (!req.files || !req.files.length) {
@@ -44,15 +53,23 @@ export async function detectImages(req, res) {
         const form = new FormData();
         form.append("image", fileBuffer, {
           filename: file.originalname,
-          contentType: file.mimetype || "image/jpeg"
+          contentType: file.mimetype || "image/jpeg",
+          knownLength: fileBuffer.length
         });
+
+        const contentLength = await getFormLength(form);
 
         const response = await axios.post(
           `${process.env.ML_SERVICE_URL}/detect`,
           form,
           {
-            headers: form.getHeaders(),
-            timeout: 60000
+            headers: {
+              ...form.getHeaders(),
+              "Content-Length": contentLength
+            },
+            timeout: 60000,
+            maxBodyLength: Infinity,
+            maxContentLength: Infinity
           }
         );
 
@@ -89,8 +106,6 @@ export async function detectImages(req, res) {
           name: err?.name,
           message: err?.message,
           code: err?.code,
-          cause: err?.cause,
-          stack: err?.stack,
           responseStatus: err?.response?.status,
           responseData: err?.response?.data,
           axios: typeof err?.toJSON === "function" ? err.toJSON() : null
