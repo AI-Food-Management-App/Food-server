@@ -19,6 +19,7 @@ if (!fs.existsSync("uploads")) {
 
 const allowedOrigins = [
   "http://localhost:4200",
+  "http://localhost:8100",
   process.env.FRONTEND_URL,        
 ].filter(Boolean);                 
 app.use(cors({
