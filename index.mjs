@@ -18,29 +18,9 @@ if (!fs.existsSync("uploads")) {
   fs.mkdirSync("uploads");
 }
 
-const allowedOrigins = [
-  "http://localhost:4200",
-  "http://localhost:8100",
-  process.env.FRONTEND_URL,        
-].filter(Boolean);                 
-app.use(cors({
-  origin: (origin, callback) => {
-    if (!origin) return callback(null, true);
-    if (allowedOrigins.includes(origin)) return callback(null, true);
-    callback(new Error(`CORS blocked for origin: ${origin}`));
-  },
-  credentials: true
-}));
+app.use(cors({ origin: true, credentials: true }));
 
 app.use(express.json());
-
-app.get("/", (req, res) => {
-  res.json({ 
-    status: "ok", 
-    service: "M.ai Food Server",
-    version: "1.0.0"
-  });
-});
 
 app.use("/api", authRoutes);
 
