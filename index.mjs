@@ -8,6 +8,7 @@ import authRoutes from "./routes/auth.routes.mjs";
 import profileRoutes from "./routes/profile.routes.mjs";
 import { supabase } from "./db/supabase.mjs";
 import fs from "fs";
+import { requireAuth } from "./middleware/auth.mjs";
 import dotenv from "dotenv";
 
 const app = express();
@@ -42,10 +43,11 @@ app.get("/", (req, res) => {
 });
 
 app.use("/api", authRoutes);
-app.use("/api", fridgeRoutes);
-app.use("/api", shoppingListRoutes);
-app.use("/api", mlRoutes);
-app.use("/api", profileRoutes);
+
+app.use("/api", requireAuth, fridgeRoutes);
+app.use("/api", requireAuth, shoppingListRoutes);
+app.use("/api", requireAuth, mlRoutes);
+app.use("/api", requireAuth, profileRoutes);
 
 (async () => {
   try {
