@@ -8,7 +8,7 @@ import authRoutes from "./routes/auth.routes.mjs";
 import profileRoutes from "./routes/profile.routes.mjs";
 import { supabase } from "./db/supabase.mjs";
 import fs from "fs";
-import { requireAuth } from "./middleware/auth.mjs";
+import { requireAuth } from "./middleware/auth.middleware.mjs";
 import dotenv from "dotenv";
 
 const app = express();
